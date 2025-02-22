@@ -78,6 +78,8 @@
     <input type="color" id="colorPicker" value="#000000">
     <label><input type="checkbox" id="floodFillMode"> Flood Fill</label>
     <p>Hold Shift while drawing to erase pixels.</p>
+    <label for="fileInput">Load Sprite Sheet:</label>
+    <input type="file" id="fileInput" accept="image/*">
   </div>
 
   <div id="frames-container">
@@ -113,6 +115,7 @@
     const tiledHorizontalCanvas = document.getElementById('tiledHorizontalCanvas');
     const tiledVerticalCanvas = document.getElementById('tiledVerticalCanvas');
     const saveButton = document.getElementById('saveButton');
+    const fileInput = document.getElementById('fileInput');
 
     const frameWidth = 32;
     const frameHeight = 32;
@@ -198,7 +201,6 @@
           updatePreviews();
         }
 
-
         function floodFill(x, y, targetColor, replacementColor) {
           if (x < 0 || x >= frameWidth || y < 0 || y >= frameHeight) return;
 
@@ -225,10 +227,23 @@
           floodFill(x, y - 1, targetColor, replacementColor);
         }
 
-
         saveState();
 
-        if (floodFillMode) {
+        if (event.ctrlKey) { // Eyedropper
+          const rect = newFrame.getBoundingClientRect();
+          const x = Math.floor((event.clientX - rect.left) / (rect.width / frameWidth));
+          const y = Math.floor((event.clientY - rect.top) / (rect.height / frameHeight));
+
+          if (x < 0 || x >= frameWidth || y < 0 || y >= frameHeight) return;
+
+          const context = frameData.canvas.getContext('2d');
+          const imageData = context.getImageData(x, y, 1, 1).data;
+          const r = imageData[0];
+          const g = imageData[1];
+          const b = imageData[2];
+          currentColor = `#${(r).toString(16).padStart(2, '0')}${(g).toString(16).padStart(2, '0')}${(b).toString(16).padStart(2, '0')}`;
+          colorPicker.value = currentColor;
+        } else if (floodFillMode) {
           const rect = newFrame.getBoundingClientRect();
           const x = Math.floor((event.clientX - rect.left) / (rect.width / frameWidth));
           const y = Math.floor((event.clientY - rect.top) / (rect.height / frameHeight));
@@ -383,6 +398,57 @@
     floodFillModeCheckbox.addEventListener('change', (event) => {
       floodFillMode = event.target.checked;
     });
+
+      fileInput.addEventListener('change', (event) => {
+          const file = event.target.files[0];
+          if (file) {
+              const reader = new FileReader();
+              reader.onload = function (e) {
+                  const img = new Image();
+                  img.onload = function () {
+                      // Determine number of frames based on the image width
+                      const numFrames = Math.floor(img.width / (frameWidth * upscaleFactor));
+
+                      // Clear existing frames
+                      while (currentFrames.length > 0) {
+                          const frameData = currentFrames.pop();
+                          frameData.canvas.parentNode.remove(); //remove the actual element
+                      }
+                      framesContainer.innerHTML = '';
+                      // currentFrames = []; //Clear array before the while loop
+
+                      // Create and load frames
+                      for (let i = 0; i < numFrames; i++) {
+                          const newFrame = initializeFrame();
+                          const context = newFrame.getContext('2d');
+
+                          // Draw the section of the image onto the frame (downscaling)
+                          context.drawImage(
+                              img,
+                              i * frameWidth * upscaleFactor, // Source X: frame index * upscaled frameWidth
+                              0,                          // Source Y
+                              frameWidth * upscaleFactor, // Source Width: upscaled frameWidth
+                              frameHeight * upscaleFactor, // Source Height: upscaled frameHeight
+                              0,                          // Destination X
+                              0,                          // Destination Y
+                              frameWidth,               // Destination Width: frameWidth (downscaled)
+                              frameHeight                // Destination Height: frameHeight (downscaled)
+                          );
+
+                          addFrame(newFrame);
+                      }
+
+                      if(currentFrames.length > 0) {
+                        setActiveFrame(0); //set first frame to active
+                      }
+
+                      updatePreviews();
+                  }
+                  img.src = e.target.result;
+              }
+              reader.readAsDataURL(file);
+          }
+      });
 
 
     saveButton.addEventListener('click', () => {

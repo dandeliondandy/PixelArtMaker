@@ -7,6 +7,12 @@
       font-family: sans-serif;
     }
 
+    #frames-container {
+      display: flex;
+      overflow-x: auto; /* Horizontal scrollbar when too many frames */
+      margin-bottom: 10px; /* Space between frames and other elements */
+    }
+
     .frame-container {
       display: inline-block;
       margin-right: 10px;
@@ -16,8 +22,8 @@
     .frame-canvas {
       border: 1px solid #ccc;
       cursor: crosshair;
-      width: 256px;
-      height: 256px;
+      width: 512px; /* Increased for larger display */
+      height: 512px; /* Increased for larger display */
       image-rendering: pixelated;
     }
 
@@ -43,21 +49,35 @@
 
     #tiledHorizontalCanvas {
       border: 1px solid black;
+      width: 1024px; /* Wider for better visibility */
+      height: 64px; /* Taller for better visibility */
     }
 
     #tiledVerticalCanvas {
       border: 1px solid black;
+      width: 64px; /* Wider for better visibility */
+      height: 512px; /* Taller for better visibility */
+      float: left; /* Align to the left */
+      margin-right: 10px; /* Space between vertical tile and other content */
     }
 
+    #controls {
+      margin-bottom: 10px; /* Space between controls and frames */
+    }
+
+    #preview-area {
+      clear: both; /* Ensure it's below the floating vertical tile */
+    }
   </style>
 </head>
 <body>
   <h1>Pixel Art Sprite Sheet Editor</h1>
 
-  <div>
+  <div id="controls">
     <label for="colorPicker">Color:</label>
     <input type="color" id="colorPicker" value="#000000">
     <label><input type="checkbox" id="floodFillMode"> Flood Fill</label>
+    <p>Hold Shift while drawing to erase pixels.</p> <!-- Instructions -->
   </div>
 
   <div id="frames-container">
@@ -68,14 +88,16 @@
     <button id="duplicateFrameButton">Duplicate Frame</button>
   </div>
 
-  <h2>Preview</h2>
-  <canvas id="previewCanvas" width="32" height="32"></canvas>
+  <div id = "preview-area">
+    <h2>Preview</h2>
+    <canvas id="previewCanvas" width="64" height="64"></canvas>
 
-  <h2>Tiled Horizontal</h2>
-  <canvas id="tiledHorizontalCanvas" width="256" height="32"></canvas>
+    <h2>Tiled Horizontal</h2>
+    <canvas id="tiledHorizontalCanvas"></canvas>
 
-  <h2>Tiled Vertical</h2>
-  <canvas id="tiledVerticalCanvas" width="32" height="256"></canvas>
+    <h2>Tiled Vertical</h2>
+    <canvas id="tiledVerticalCanvas"></canvas>
+  </div>
 
   <div>
     <button id="saveButton">Save Sprite Sheet</button>
@@ -94,8 +116,8 @@
 
     const frameWidth = 32;
     const frameHeight = 32;
-    const previewWidth = 32;
-    const previewHeight = 32;
+    const previewWidth = 64; //Upscaled preview
+    const previewHeight = 64; //Upscaled preview
     const undoLimit = 20;
     const upscaleFactor = 2;
 
@@ -148,32 +170,32 @@
         const frameData = currentFrames[currentFrameIndex];
 
         function saveState() {
-            frameData.redoStack = []; //Clear redo before saving
-            const imageData = frameData.canvas.getContext('2d').getImageData(0, 0, frameWidth, frameHeight);
-            frameData.undoStack.push(imageData);
-            while (frameData.undoStack.length > undoLimit) {
-                frameData.undoStack.shift();
-            }
+          frameData.redoStack = [];
+          const imageData = frameData.canvas.getContext('2d').getImageData(0, 0, frameWidth, frameHeight);
+          frameData.undoStack.push(imageData);
+          while (frameData.undoStack.length > undoLimit) {
+            frameData.undoStack.shift();
+          }
         }
 
         function drawPixel(event) {
-            if (!isDrawing || activeFrameIndex !== currentFrameIndex) return;
+          if (!isDrawing || activeFrameIndex !== currentFrameIndex) return;
 
-            const rect = newFrame.getBoundingClientRect();
-            const x = Math.floor((event.clientX - rect.left) / (rect.width / frameWidth));
-            const y = Math.floor((event.clientY - rect.top) / (rect.height / frameHeight));
+          const rect = newFrame.getBoundingClientRect();
+          const x = Math.floor((event.clientX - rect.left) / (rect.width / frameWidth));
+          const y = Math.floor((event.clientY - rect.top) / (rect.height / frameHeight));
 
-            if (x < 0 || x >= frameWidth || y < 0 || y >= frameHeight) return;
+          if (x < 0 || x >= frameWidth || y < 0 || y >= frameHeight) return;
 
-            const context = frameData.canvas.getContext('2d');
-            if (event.shiftKey) {  // Erase with shift
-                context.clearRect(x, y, 1, 1);
-            } else {
-                context.fillStyle = currentColor;
-                context.fillRect(x, y, 1, 1);
-            }
+          const context = frameData.canvas.getContext('2d');
+          if (event.shiftKey) {
+            context.clearRect(x, y, 1, 1);
+          } else {
+            context.fillStyle = currentColor;
+            context.fillRect(x, y, 1, 1);
+          }
 
-            updatePreviews();
+          updatePreviews();
         }
 
 
@@ -204,11 +226,9 @@
         }
 
 
-
         saveState();
 
         if (floodFillMode) {
-          // Flood fill using checkbox
           const rect = newFrame.getBoundingClientRect();
           const x = Math.floor((event.clientX - rect.left) / (rect.width / frameWidth));
           const y = Math.floor((event.clientY - rect.top) / (rect.height / frameHeight));
@@ -229,12 +249,12 @@
 
           floodFill(x, y, targetColor, currentColor);
         } else {
-          drawPixel(event); // Regular pixel drawing (or erase)
+          drawPixel(event);
         }
 
 
           newFrame.addEventListener('mousemove', function mouseMoveHandler(event) {
-              if (floodFillMode) return; //Disable drag drawing for fill
+              if (floodFillMode) return;
 
               drawPixel(event);
           });
@@ -249,11 +269,8 @@
               newFrame.removeEventListener('mousemove', mouseMoveHandler);
           });
 
-
-
         updatePreviews();
       });
-
 
       deleteButton.addEventListener('click', (event) => {
         event.stopPropagation();
@@ -281,7 +298,6 @@
       updateActiveFrameHighlight();
       updatePreviews();
     }
-
 
     function setActiveFrame(index) {
       activeFrameIndex = index;
@@ -344,7 +360,6 @@
       }
     }
 
-
     addFrameButton.addEventListener('click', () => {
       const newFrame = initializeFrame();
       const frameContainer = addFrame(newFrame);
@@ -367,7 +382,7 @@
     });
 
     floodFillModeCheckbox.addEventListener('change', (event) => {
-        floodFillMode = event.target.checked;
+      floodFillMode = event.target.checked;
     });
 
 
@@ -401,33 +416,33 @@
 
     //Undo Function
     document.addEventListener('keydown', function(event) {
-        if (event.ctrlKey && event.key === 'z') {
-            if (activeFrameIndex >= 0 && currentFrames[activeFrameIndex]) {
-                const frameData = currentFrames[activeFrameIndex];
-                if (frameData.undoStack.length > 0) {
-                    const context = frameData.canvas.getContext('2d');
-                    const imageData = frameData.undoStack.pop();
-                    frameData.redoStack.push(context.getImageData(0, 0, frameWidth, frameHeight)); //save current state to redo
+      if (event.ctrlKey && event.key === 'z') {
+        if (activeFrameIndex >= 0 && currentFrames[activeFrameIndex]) {
+          const frameData = currentFrames[activeFrameIndex];
+          if (frameData.undoStack.length > 0) {
+            const context = frameData.canvas.getContext('2d');
+            const imageData = frameData.undoStack.pop();
+            frameData.redoStack.push(context.getImageData(0, 0, frameWidth, frameHeight));
 
-                    context.putImageData(imageData, 0, 0);
-                    updatePreviews();
-                }
-            }
+            context.putImageData(imageData, 0, 0);
+            updatePreviews();
+          }
         }
+      }
 
-        if (event.ctrlKey && event.key === 'y') {
-            if (activeFrameIndex >= 0 && currentFrames[activeFrameIndex]) {
-                const frameData = currentFrames[activeFrameIndex];
-                if (frameData.redoStack.length > 0) {
-                    const context = frameData.canvas.getContext('2d');
-                    const imageData = frameData.redoStack.pop();
-                    frameData.undoStack.push(context.getImageData(0, 0, frameWidth, frameHeight)); //save current state to undo
+      if (event.ctrlKey && event.key === 'y') {
+        if (activeFrameIndex >= 0 && currentFrames[activeFrameIndex]) {
+          const frameData = currentFrames[activeFrameIndex];
+          if (frameData.redoStack.length > 0) {
+            const context = frameData.canvas.getContext('2d');
+            const imageData = frameData.redoStack.pop();
+            frameData.undoStack.push(context.getImageData(0, 0, frameWidth, frameHeight));
 
-                    context.putImageData(imageData, 0, 0);
-                    updatePreviews();
-                }
-            }
+            context.putImageData(imageData, 0, 0);
+            updatePreviews();
+          }
         }
+      }
     });
 
     // Initial frame

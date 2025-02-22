@@ -1,0 +1,440 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Pixel Art Sprite Sheet Editor</title>
+  <style>
+    body {
+      font-family: sans-serif;
+    }
+
+    .frame-container {
+      display: inline-block;
+      margin-right: 10px;
+      position: relative;
+    }
+
+    .frame-canvas {
+      border: 1px solid #ccc;
+      cursor: crosshair;
+      width: 256px;
+      height: 256px;
+      image-rendering: pixelated;
+    }
+
+    .delete-frame-button {
+      position: absolute;
+      top: 0;
+      right: 0;
+      background-color: rgba(255, 0, 0, 0.7);
+      color: white;
+      border: none;
+      padding: 2px 5px;
+      cursor: pointer;
+      font-size: 0.8em;
+    }
+
+    .frame-container.active-frame .frame-canvas {
+      border: 2px solid blue;
+    }
+
+    #previewCanvas {
+      border: 1px solid black;
+    }
+
+    #tiledHorizontalCanvas {
+      border: 1px solid black;
+    }
+
+    #tiledVerticalCanvas {
+      border: 1px solid black;
+    }
+
+  </style>
+</head>
+<body>
+  <h1>Pixel Art Sprite Sheet Editor</h1>
+
+  <div>
+    <label for="colorPicker">Color:</label>
+    <input type="color" id="colorPicker" value="#000000">
+    <label><input type="checkbox" id="floodFillMode"> Flood Fill</label>
+  </div>
+
+  <div id="frames-container">
+  </div>
+
+  <div>
+    <button id="addFrameButton">Add Blank Frame</button>
+    <button id="duplicateFrameButton">Duplicate Frame</button>
+  </div>
+
+  <h2>Preview</h2>
+  <canvas id="previewCanvas" width="32" height="32"></canvas>
+
+  <h2>Tiled Horizontal</h2>
+  <canvas id="tiledHorizontalCanvas" width="256" height="32"></canvas>
+
+  <h2>Tiled Vertical</h2>
+  <canvas id="tiledVerticalCanvas" width="32" height="256"></canvas>
+
+  <div>
+    <button id="saveButton">Save Sprite Sheet</button>
+  </div>
+
+  <script>
+    const framesContainer = document.getElementById('frames-container');
+    const colorPicker = document.getElementById('colorPicker');
+    const floodFillModeCheckbox = document.getElementById('floodFillMode');
+    const addFrameButton = document.getElementById('addFrameButton');
+    const duplicateFrameButton = document.getElementById('duplicateFrameButton');
+    const previewCanvas = document.getElementById('previewCanvas');
+    const tiledHorizontalCanvas = document.getElementById('tiledHorizontalCanvas');
+    const tiledVerticalCanvas = document.getElementById('tiledVerticalCanvas');
+    const saveButton = document.getElementById('saveButton');
+
+    const frameWidth = 32;
+    const frameHeight = 32;
+    const previewWidth = 32;
+    const previewHeight = 32;
+    const undoLimit = 20;
+    const upscaleFactor = 2;
+
+    let currentFrames = [];
+    let currentColor = colorPicker.value;
+    let activeFrameIndex = 0;
+    let floodFillMode = false;
+
+
+    function initializeFrame() {
+      const canvas = document.createElement('canvas');
+      canvas.width = frameWidth;
+      canvas.height = frameHeight;
+      canvas.classList.add('frame-canvas');
+      const context = canvas.getContext('2d');
+      context.clearRect(0, 0, frameWidth, frameHeight);
+      context.fillStyle = 'rgba(0, 0, 0, 0)';
+      context.fillRect(0, 0, frameWidth, frameHeight);
+      return canvas;
+    }
+
+
+    function addFrame(newFrame) {
+      const frameContainer = document.createElement('div');
+      frameContainer.classList.add('frame-container');
+
+      const deleteButton = document.createElement('button');
+      deleteButton.classList.add('delete-frame-button');
+      deleteButton.textContent = 'X';
+
+      frameContainer.appendChild(newFrame);
+      frameContainer.appendChild(deleteButton);
+
+      framesContainer.appendChild(frameContainer);
+
+      currentFrames.push({
+        canvas: newFrame,
+        undoStack: [],
+        redoStack: []
+      });
+
+      let currentFrameIndex = currentFrames.length - 1;
+
+      frameContainer.addEventListener('click', () => {
+        setActiveFrame(currentFrameIndex);
+      });
+
+      newFrame.addEventListener('mousedown', function(event) {
+        let isDrawing = true;
+        const frameData = currentFrames[currentFrameIndex];
+
+        function saveState() {
+            frameData.redoStack = []; //Clear redo before saving
+            const imageData = frameData.canvas.getContext('2d').getImageData(0, 0, frameWidth, frameHeight);
+            frameData.undoStack.push(imageData);
+            while (frameData.undoStack.length > undoLimit) {
+                frameData.undoStack.shift();
+            }
+        }
+
+        function drawPixel(event) {
+            if (!isDrawing || activeFrameIndex !== currentFrameIndex) return;
+
+            const rect = newFrame.getBoundingClientRect();
+            const x = Math.floor((event.clientX - rect.left) / (rect.width / frameWidth));
+            const y = Math.floor((event.clientY - rect.top) / (rect.height / frameHeight));
+
+            if (x < 0 || x >= frameWidth || y < 0 || y >= frameHeight) return;
+
+            const context = frameData.canvas.getContext('2d');
+            if (event.shiftKey) {  // Erase with shift
+                context.clearRect(x, y, 1, 1);
+            } else {
+                context.fillStyle = currentColor;
+                context.fillRect(x, y, 1, 1);
+            }
+
+            updatePreviews();
+        }
+
+
+        function floodFill(x, y, targetColor, replacementColor) {
+          if (x < 0 || x >= frameWidth || y < 0 || y >= frameHeight) return;
+
+          const context = frameData.canvas.getContext('2d');
+          const imageData = context.getImageData(0, 0, frameWidth, frameHeight);
+          const data = imageData.data;
+
+          const pixelIndex = (y * frameWidth + x) * 4;
+          const r = data[pixelIndex];
+          const g = data[pixelIndex + 1];
+          const b = data[pixelIndex + 2];
+          const a = data[pixelIndex + 3];
+
+          const currentColor = `rgba(${r}, ${g}, ${b}, ${a / 255})`;
+
+          if (currentColor !== targetColor) return;
+
+          context.fillStyle = replacementColor;
+          context.fillRect(x, y, 1, 1);
+
+          floodFill(x + 1, y, targetColor, replacementColor);
+          floodFill(x - 1, y, targetColor, replacementColor);
+          floodFill(x, y + 1, targetColor, replacementColor);
+          floodFill(x, y - 1, targetColor, replacementColor);
+        }
+
+
+
+        saveState();
+
+        if (floodFillMode) {
+          // Flood fill using checkbox
+          const rect = newFrame.getBoundingClientRect();
+          const x = Math.floor((event.clientX - rect.left) / (rect.width / frameWidth));
+          const y = Math.floor((event.clientY - rect.top) / (rect.height / frameHeight));
+
+          if (x < 0 || x >= frameWidth || y < 0 || y >= frameHeight) return;
+
+          const context = frameData.canvas.getContext('2d');
+          const imageData = context.getImageData(0, 0, frameWidth, frameHeight);
+          const data = imageData.data;
+
+          const pixelIndex = (y * frameWidth + x) * 4;
+          const r = data[pixelIndex];
+          const g = data[pixelIndex + 1];
+          const b = data[pixelIndex + 2];
+          const a = data[pixelIndex + 3];
+
+          const targetColor = `rgba(${r}, ${g}, ${b}, ${a / 255})`;
+
+          floodFill(x, y, targetColor, currentColor);
+        } else {
+          drawPixel(event); // Regular pixel drawing (or erase)
+        }
+
+
+          newFrame.addEventListener('mousemove', function mouseMoveHandler(event) {
+              if (floodFillMode) return; //Disable drag drawing for fill
+
+              drawPixel(event);
+          });
+
+          newFrame.addEventListener('mouseup', function() {
+              isDrawing = false;
+              newFrame.removeEventListener('mousemove', mouseMoveHandler);
+          });
+
+          newFrame.addEventListener('mouseleave', function() {
+              isDrawing = false;
+              newFrame.removeEventListener('mousemove', mouseMoveHandler);
+          });
+
+
+
+        updatePreviews();
+      });
+
+
+      deleteButton.addEventListener('click', (event) => {
+        event.stopPropagation();
+        const index = currentFrames.findIndex(frame => frame.canvas === newFrame);
+        if (index > -1) {
+          currentFrames.splice(index, 1);
+          frameContainer.remove();
+          if (activeFrameIndex >= index && activeFrameIndex > 0) {
+            setActiveFrame(activeFrameIndex - 1);
+          } else {
+            updatePreviews();
+          }
+          if (currentFrames.length === 0) {
+            resetActiveFrame()
+          }
+        }
+      });
+
+      updatePreviews();
+      return frameContainer;
+    }
+
+    function resetActiveFrame() {
+      activeFrameIndex = -1;
+      updateActiveFrameHighlight();
+      updatePreviews();
+    }
+
+
+    function setActiveFrame(index) {
+      activeFrameIndex = index;
+      updateActiveFrameHighlight();
+      updatePreviews();
+    }
+
+    function updateActiveFrameHighlight() {
+      const frameContainers = document.querySelectorAll('.frame-container');
+      frameContainers.forEach((container, i) => {
+        if (i === activeFrameIndex) {
+          container.classList.add('active-frame');
+        } else {
+          container.classList.remove('active-frame');
+        }
+      });
+    }
+
+    function updatePreviews() {
+      updatePreview();
+      updateTiledHorizontal();
+      updateTiledVertical();
+    }
+
+    function updatePreview() {
+      const previewContext = previewCanvas.getContext('2d');
+      previewContext.clearRect(0, 0, previewWidth, previewHeight);
+
+      if (currentFrames.length > 0 && activeFrameIndex >= 0) {
+        const frame = currentFrames[activeFrameIndex].canvas;
+        previewContext.drawImage(frame, 0, 0, previewWidth, previewHeight);
+      }
+    }
+
+    function updateTiledHorizontal() {
+      const tiledContext = tiledHorizontalCanvas.getContext('2d');
+      tiledContext.clearRect(0, 0, tiledHorizontalCanvas.width, tiledHorizontalCanvas.height);
+
+      const numTiles = Math.floor(tiledHorizontalCanvas.width / previewWidth);
+
+      if (currentFrames.length > 0 && activeFrameIndex >= 0) {
+        const frame = currentFrames[activeFrameIndex].canvas;
+        for (let i = 0; i < numTiles; i++) {
+          tiledContext.drawImage(frame, i * previewWidth, 0, previewWidth, previewHeight);
+        }
+      }
+    }
+
+    function updateTiledVertical() {
+      const tiledContext = tiledVerticalCanvas.getContext('2d');
+      tiledContext.clearRect(0, 0, tiledVerticalCanvas.width, tiledVerticalCanvas.height);
+
+      const numTiles = Math.floor(tiledVerticalCanvas.height / previewHeight);
+
+      if (currentFrames.length > 0 && activeFrameIndex >= 0) {
+        const frame = currentFrames[activeFrameIndex].canvas;
+        for (let i = 0; i < numTiles; i++) {
+          tiledContext.drawImage(frame, 0, i * previewHeight, previewWidth, previewHeight);
+        }
+      }
+    }
+
+
+    addFrameButton.addEventListener('click', () => {
+      const newFrame = initializeFrame();
+      const frameContainer = addFrame(newFrame);
+      setActiveFrame(currentFrames.length - 1);
+    });
+
+    duplicateFrameButton.addEventListener('click', () => {
+      if (currentFrames.length === 0) return;
+
+      const lastFrameData = currentFrames[currentFrames.length - 1];
+      const newFrame = initializeFrame();
+      const context = newFrame.getContext('2d');
+      context.drawImage(lastFrameData.canvas, 0, 0);
+      const frameContainer = addFrame(newFrame);
+      setActiveFrame(currentFrames.length - 1);
+    });
+
+    colorPicker.addEventListener('input', (event) => {
+      currentColor = event.target.value;
+    });
+
+    floodFillModeCheckbox.addEventListener('change', (event) => {
+        floodFillMode = event.target.checked;
+    });
+
+
+    saveButton.addEventListener('click', () => {
+      if (currentFrames.length === 0) {
+        alert("No frames to save!");
+        return;
+      }
+
+      const totalWidth = frameWidth * currentFrames.length;
+      const spriteSheetCanvas = document.createElement('canvas');
+      spriteSheetCanvas.width = totalWidth * upscaleFactor;
+      spriteSheetCanvas.height = frameHeight * upscaleFactor;
+      const spriteSheetContext = spriteSheetCanvas.getContext('2d');
+      spriteSheetContext.imageSmoothingEnabled = false;
+
+      let xOffset = 0;
+      for (const frameData of currentFrames) {
+        spriteSheetContext.drawImage(frameData.canvas, xOffset, 0, frameWidth * upscaleFactor, frameHeight * upscaleFactor);
+        xOffset += frameWidth * upscaleFactor;
+      }
+
+      const dataURL = spriteSheetCanvas.toDataURL("image/png");
+      const link = document.createElement('a');
+      link.href = dataURL;
+      link.download = "sprite_sheet.png";
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    });
+
+    //Undo Function
+    document.addEventListener('keydown', function(event) {
+        if (event.ctrlKey && event.key === 'z') {
+            if (activeFrameIndex >= 0 && currentFrames[activeFrameIndex]) {
+                const frameData = currentFrames[activeFrameIndex];
+                if (frameData.undoStack.length > 0) {
+                    const context = frameData.canvas.getContext('2d');
+                    const imageData = frameData.undoStack.pop();
+                    frameData.redoStack.push(context.getImageData(0, 0, frameWidth, frameHeight)); //save current state to redo
+
+                    context.putImageData(imageData, 0, 0);
+                    updatePreviews();
+                }
+            }
+        }
+
+        if (event.ctrlKey && event.key === 'y') {
+            if (activeFrameIndex >= 0 && currentFrames[activeFrameIndex]) {
+                const frameData = currentFrames[activeFrameIndex];
+                if (frameData.redoStack.length > 0) {
+                    const context = frameData.canvas.getContext('2d');
+                    const imageData = frameData.redoStack.pop();
+                    frameData.undoStack.push(context.getImageData(0, 0, frameWidth, frameHeight)); //save current state to undo
+
+                    context.putImageData(imageData, 0, 0);
+                    updatePreviews();
+                }
+            }
+        }
+    });
+
+    // Initial frame
+    const initialFrame = initializeFrame();
+    addFrame(initialFrame);
+    setActiveFrame(0);
+
+  </script>
+</body>
+</html>

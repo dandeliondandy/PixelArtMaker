@@ -68,6 +68,28 @@
     #preview-area {
       clear: both;
     }
+
+    /* Added style for the onion skin overlay */
+    .onion-skin-canvas {
+      position: absolute;
+      top: 0;
+      left: 0;
+      pointer-events: none;
+      width: 100%;
+      height: 100%;
+      image-rendering: pixelated;
+    }
+
+    /* Style for the animation preview area */
+    #animation-area {
+      margin-top: 20px;
+    }
+
+    #animationPreviewCanvas {
+      border: 1px solid black;
+      display: block;
+      margin-top: 10px;
+    }
   </style>
 </head>
 <body>
@@ -77,6 +99,8 @@
     <label for="colorPicker">Color:</label>
     <input type="color" id="colorPicker" value="#000000">
     <label><input type="checkbox" id="floodFillMode"> Flood Fill</label>
+    <!-- Added Onion Skinning Checkbox -->
+    <label><input type="checkbox" id="onionSkinningMode"> Onion Skinning</label>
     <p>Hold Shift while drawing to erase pixels.</p>
     <label for="fileInput">Load Sprite Sheet:</label>
     <input type="file" id="fileInput" accept="image/*">
@@ -90,7 +114,7 @@
     <button id="duplicateFrameButton">Duplicate Frame</button>
   </div>
 
-  <div id = "preview-area">
+  <div id="preview-area">
     <h2>Preview</h2>
     <canvas id="previewCanvas" width="64" height="64"></canvas>
 
@@ -99,6 +123,17 @@
 
     <h2>Tiled Vertical</h2>
     <canvas id="tiledVerticalCanvas"></canvas>
+
+    <!-- New Animation Preview Section -->
+    <div id="animation-area">
+      <h2>Animation Preview</h2>
+      <div id="animationControls">
+        <label for="animationSpeed">Speed (sec per frame):</label>
+        <input type="number" id="animationSpeed" step="0.1" value="0.2" min="0.1">
+        <button id="playToggle">Play</button>
+      </div>
+      <canvas id="animationPreviewCanvas" width="64" height="64"></canvas>
+    </div>
   </div>
 
   <div>
@@ -109,6 +144,7 @@
     const framesContainer = document.getElementById('frames-container');
     const colorPicker = document.getElementById('colorPicker');
     const floodFillModeCheckbox = document.getElementById('floodFillMode');
+    const onionSkinningCheckbox = document.getElementById('onionSkinningMode');
     const addFrameButton = document.getElementById('addFrameButton');
     const duplicateFrameButton = document.getElementById('duplicateFrameButton');
     const previewCanvas = document.getElementById('previewCanvas');
@@ -116,6 +152,10 @@
     const tiledVerticalCanvas = document.getElementById('tiledVerticalCanvas');
     const saveButton = document.getElementById('saveButton');
     const fileInput = document.getElementById('fileInput');
+    // Animation preview elements
+    const animationPreviewCanvas = document.getElementById('animationPreviewCanvas');
+    const animationSpeedInput = document.getElementById('animationSpeed');
+    const playToggleButton = document.getElementById('playToggle');
 
     const frameWidth = 32;
     const frameHeight = 32;
@@ -129,6 +169,10 @@
     let activeFrameIndex = 0;
     let floodFillMode = false;
 
+    // Animation variables
+    let animationPlaying = false;
+    let animationInterval = null;
+    let animationFrameIndex = 0;
 
     function initializeFrame() {
       const canvas = document.createElement('canvas');
@@ -141,7 +185,6 @@
       context.fillRect(0, 0, frameWidth, frameHeight);
       return canvas;
     }
-
 
     function addFrame(newFrame) {
       const frameContainer = document.createElement('div');
@@ -269,7 +312,6 @@
 
         newFrame.addEventListener('mousemove', function mouseMoveHandler(event) {
           if (floodFillMode) return;
-
           drawPixel(event);
         });
 
@@ -298,7 +340,7 @@
             updatePreviews();
           }
           if (currentFrames.length === 0) {
-            resetActiveFrame()
+            resetActiveFrame();
           }
         }
       });
@@ -317,6 +359,7 @@
       activeFrameIndex = index;
       updateActiveFrameHighlight();
       updatePreviews();
+      updateOnionSkin(); // Update onion skin overlay when active frame changes
     }
 
     function updateActiveFrameHighlight() {
@@ -374,6 +417,93 @@
       }
     }
 
+    // Added function to update the onion skin overlay on the active frame
+    function updateOnionSkin() {
+      if (!onionSkinningCheckbox.checked) {
+        // Remove any existing onion skin overlay from the active frame container
+        const activeFrameContainer = framesContainer.children[activeFrameIndex];
+        if (activeFrameContainer) {
+          const existingOnionSkin = activeFrameContainer.querySelector('.onion-skin-canvas');
+          if (existingOnionSkin) {
+            existingOnionSkin.remove();
+          }
+        }
+        return;
+      }
+      const activeFrameContainer = framesContainer.children[activeFrameIndex];
+      if (!activeFrameContainer) return;
+      let onionSkinCanvas = activeFrameContainer.querySelector('.onion-skin-canvas');
+      if (!onionSkinCanvas) {
+        onionSkinCanvas = document.createElement('canvas');
+        onionSkinCanvas.classList.add('onion-skin-canvas');
+        const frameCanvas = activeFrameContainer.querySelector('.frame-canvas');
+        if (frameCanvas) {
+          onionSkinCanvas.width = frameCanvas.width;
+          onionSkinCanvas.height = frameCanvas.height;
+        }
+        // Insert the onion skin canvas as the first child so it appears behind the frame canvas
+        activeFrameContainer.insertBefore(onionSkinCanvas, activeFrameContainer.firstChild);
+      }
+      const ctx = onionSkinCanvas.getContext('2d');
+      ctx.clearRect(0, 0, onionSkinCanvas.width, onionSkinCanvas.height);
+
+      // Draw previous frame if available
+      if (activeFrameIndex > 0) {
+        const prevFrame = currentFrames[activeFrameIndex - 1].canvas;
+        ctx.globalAlpha = 0.5; // adjust transparency as needed
+        ctx.drawImage(prevFrame, 0, 0, onionSkinCanvas.width, onionSkinCanvas.height);
+      }
+
+      // Draw next frame if available
+      if (activeFrameIndex < currentFrames.length - 1) {
+        const nextFrame = currentFrames[activeFrameIndex + 1].canvas;
+        ctx.globalAlpha = 0.5;
+        ctx.drawImage(nextFrame, 0, 0, onionSkinCanvas.width, onionSkinCanvas.height);
+      }
+
+      ctx.globalAlpha = 1.0; // reset alpha
+    }
+
+    // Animation functions
+    function startAnimation() {
+      const speed = parseFloat(animationSpeedInput.value) * 1000; // convert seconds to ms
+      if (animationInterval) clearInterval(animationInterval);
+      animationInterval = setInterval(() => {
+        if (currentFrames.length === 0) return;
+        const animCtx = animationPreviewCanvas.getContext('2d');
+        animCtx.clearRect(0, 0, animationPreviewCanvas.width, animationPreviewCanvas.height);
+        const frame = currentFrames[animationFrameIndex].canvas;
+        animCtx.drawImage(frame, 0, 0, animationPreviewCanvas.width, animationPreviewCanvas.height);
+        animationFrameIndex = (animationFrameIndex + 1) % currentFrames.length;
+      }, speed);
+    }
+
+    function stopAnimation() {
+      if (animationInterval) {
+        clearInterval(animationInterval);
+        animationInterval = null;
+      }
+    }
+
+    playToggleButton.addEventListener('click', () => {
+      animationPlaying = !animationPlaying;
+      if (animationPlaying) {
+        playToggleButton.textContent = "Stop";
+        animationFrameIndex = 0; // reset index
+        startAnimation();
+      } else {
+        playToggleButton.textContent = "Play";
+        stopAnimation();
+      }
+    });
+
+    animationSpeedInput.addEventListener('change', () => {
+      if (animationPlaying) {
+        stopAnimation();
+        startAnimation();
+      }
+    });
+
     addFrameButton.addEventListener('click', () => {
       const newFrame = initializeFrame();
       const frameContainer = addFrame(newFrame);
@@ -387,7 +517,7 @@
       const newFrame = initializeFrame();
       const context = newFrame.getContext('2d');
       context.drawImage(lastFrameData.canvas, 0, 0);
-      const frameContainer = addFrame(newFrame);
+      addFrame(newFrame);
       setActiveFrame(currentFrames.length - 1);
     });
 
@@ -399,57 +529,58 @@
       floodFillMode = event.target.checked;
     });
 
-      fileInput.addEventListener('change', (event) => {
-          const file = event.target.files[0];
-          if (file) {
-              const reader = new FileReader();
-              reader.onload = function (e) {
-                  const img = new Image();
-                  img.onload = function () {
-                      // Determine number of frames based on the image width
-                      const numFrames = Math.floor(img.width / (frameWidth * upscaleFactor));
+    // Update onion skin overlay when the checkbox changes
+    onionSkinningCheckbox.addEventListener('change', updateOnionSkin);
 
-                      // Clear existing frames
-                      while (currentFrames.length > 0) {
-                          const frameData = currentFrames.pop();
-                          frameData.canvas.parentNode.remove(); //remove the actual element
-                      }
-                      framesContainer.innerHTML = '';
-                      // currentFrames = []; //Clear array before the while loop
+    fileInput.addEventListener('change', (event) => {
+      const file = event.target.files[0];
+      if (file) {
+        const reader = new FileReader();
+        reader.onload = function (e) {
+          const img = new Image();
+          img.onload = function () {
+            // Determine number of frames based on the image width
+            const numFrames = Math.floor(img.width / (frameWidth * upscaleFactor));
 
-                      // Create and load frames
-                      for (let i = 0; i < numFrames; i++) {
-                          const newFrame = initializeFrame();
-                          const context = newFrame.getContext('2d');
+            // Clear existing frames
+            while (currentFrames.length > 0) {
+              const frameData = currentFrames.pop();
+              frameData.canvas.parentNode.remove();
+            }
+            framesContainer.innerHTML = '';
 
-                          // Draw the section of the image onto the frame (downscaling)
-                          context.drawImage(
-                              img,
-                              i * frameWidth * upscaleFactor, // Source X: frame index * upscaled frameWidth
-                              0,                          // Source Y
-                              frameWidth * upscaleFactor, // Source Width: upscaled frameWidth
-                              frameHeight * upscaleFactor, // Source Height: upscaled frameHeight
-                              0,                          // Destination X
-                              0,                          // Destination Y
-                              frameWidth,               // Destination Width: frameWidth (downscaled)
-                              frameHeight                // Destination Height: frameHeight (downscaled)
-                          );
+            // Create and load frames
+            for (let i = 0; i < numFrames; i++) {
+              const newFrame = initializeFrame();
+              const context = newFrame.getContext('2d');
 
-                          addFrame(newFrame);
-                      }
+              // Draw the section of the image onto the frame (downscaling)
+              context.drawImage(
+                img,
+                i * frameWidth * upscaleFactor,
+                0,
+                frameWidth * upscaleFactor,
+                frameHeight * upscaleFactor,
+                0,
+                0,
+                frameWidth,
+                frameHeight
+              );
 
-                      if(currentFrames.length > 0) {
-                        setActiveFrame(0); //set first frame to active
-                      }
+              addFrame(newFrame);
+            }
 
-                      updatePreviews();
-                  }
-                  img.src = e.target.result;
-              }
-              reader.readAsDataURL(file);
+            if (currentFrames.length > 0) {
+              setActiveFrame(0);
+            }
+
+            updatePreviews();
           }
-      });
-
+          img.src = e.target.result;
+        }
+        reader.readAsDataURL(file);
+      }
+    });
 
     saveButton.addEventListener('click', () => {
       if (currentFrames.length === 0) {
@@ -479,7 +610,7 @@
       document.body.removeChild(link);
     });
 
-    //Undo Function
+    // Undo Function
     document.addEventListener('keydown', function(event) {
       if (event.ctrlKey && event.key === 'z') {
         if (activeFrameIndex >= 0 && currentFrames[activeFrameIndex]) {

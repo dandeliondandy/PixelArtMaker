@@ -77,8 +77,6 @@
     <label for="colorPicker">Color:</label>
     <input type="color" id="colorPicker" value="#000000">
     <label><input type="checkbox" id="floodFillMode"> Flood Fill</label>
- <!-- Onion Skinning Toggle -->
-  <label><input type="checkbox" id="onionSkinToggle"> Onion Skinning</label>
     <p>Hold Shift while drawing to erase pixels.</p>
     <label for="fileInput">Load Sprite Sheet:</label>
     <input type="file" id="fileInput" accept="image/*">
@@ -338,31 +336,15 @@
       updateTiledVertical();
     }
 
-   function updatePreview() {
-    const previewContext = previewCanvas.getContext('2d');
-    previewContext.clearRect(0, 0, previewWidth, previewHeight);
+    function updatePreview() {
+      const previewContext = previewCanvas.getContext('2d');
+      previewContext.clearRect(0, 0, previewWidth, previewHeight);
 
-    if (currentFrames.length > 0 && activeFrameIndex >= 0) {
+      if (currentFrames.length > 0 && activeFrameIndex >= 0) {
         const frame = currentFrames[activeFrameIndex].canvas;
-
-        // Check if Onion Skinning is enabled
-        if (document.getElementById('onionSkinToggle').checked) {
-            const previousFrameIndex = activeFrameIndex - 1;
-            if (previousFrameIndex >= 0) {
-                const prevFrame = currentFrames[previousFrameIndex].canvas;
-
-                // Draw previous frame with transparency
-                previewContext.globalAlpha = 0.5; // Adjust transparency level
-                previewContext.drawImage(prevFrame, 0, 0, previewWidth, previewHeight);
-                previewContext.globalAlpha = 1.0; // Reset transparency
-            }
-        }
-
-        // Draw the current frame on top
         previewContext.drawImage(frame, 0, 0, previewWidth, previewHeight);
+      }
     }
-}
-
 
     function updateTiledHorizontal() {
       const tiledContext = tiledHorizontalCanvas.getContext('2d');

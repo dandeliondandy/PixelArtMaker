@@ -3,73 +3,80 @@
 <head>
   <title>Pixel Art Sprite Sheet Editor</title>
   <style>
+    /* ... (Your existing styles - no changes needed here) ... */
     body {
       font-family: sans-serif;
     }
-
     #frames-container {
       display: flex;
       overflow-x: auto;
       margin-bottom: 10px;
     }
-
     .frame-container {
       display: inline-block;
       margin-right: 10px;
       position: relative;
     }
-
     .frame-canvas {
       border: 1px solid #ccc;
       cursor: crosshair;
       width: 512px;
       height: 512px;
       image-rendering: pixelated;
+      position: relative;
+      z-index: 1;
     }
-
-    .delete-frame-button {
+    .drag-canvas {
       position: absolute;
       top: 0;
-      right: 0;
+      left: 0;
+      pointer-events: none;
+      z-index: 2;
+      image-rendering: pixelated;
+    }
+    .delete-frame-button {
+     
       background-color: rgba(255, 0, 0, 0.7);
       color: white;
       border: none;
       padding: 2px 5px;
       cursor: pointer;
       font-size: 0.8em;
+margin-top: 2px; /* Add some space above the button */
+  display: block; /* Make it a block-level element */
+  margin-left: auto;
+  margin-right: auto;
+      
     }
 
+.button-container {
+    text-align: center; /* Center the button horizontally */
+}
     .frame-container.active-frame .frame-canvas {
       border: 2px solid blue;
     }
-
     #previewCanvas {
       border: 1px solid black;
     }
-
     #tiledHorizontalCanvas {
       border: 1px solid black;
-      width: 1024px;
+      width: 640px;
       height: 128px;
     }
-
     #tiledVerticalCanvas {
       border: 1px solid black;
       width: 128px;
-      height: 512px;
+      height: 256px;
       float: left;
       margin-right: 10px;
     }
-
     #controls {
       margin-bottom: 10px;
     }
-
     #preview-area {
       clear: both;
     }
-
-    /* Added style for the onion skin overlay */
+    /* Onion skin overlay */
     .onion-skin-canvas {
       position: absolute;
       top: 0;
@@ -78,53 +85,94 @@
       width: 100%;
       height: 100%;
       image-rendering: pixelated;
+      z-index: 0;
     }
-
-    /* Style for the animation preview area */
+    /* Animation preview area */
     #animation-area {
       margin-top: 20px;
     }
-
     #animationPreviewCanvas {
       border: 1px solid black;
       display: block;
       margin-top: 10px;
     }
+    /* Selection box styles */
+    .selection-box {
+      position: absolute;
+      border: 1px dashed black;
+      background-color: rgba(0, 0, 255, 0.1);
+      pointer-events: none;
+      display: none;
+      z-index: 3;
+    }
+    /* Paste indicator styles */
+    .paste-indicator {
+      position: absolute;
+      border: 2px dashed red;
+      background-color: rgba(255, 0, 0, 0.1);
+      pointer-events: none;
+      z-index: 4;
+    }
+    #controls {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    #controls > div {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+    }
+    #selectionControls {
+      display: none;
+    }
+    #selectionControls button {
+      padding: 5px 10px;
+      cursor: pointer;
+    }
   </style>
 </head>
 <body>
   <h1>Pixel Art Sprite Sheet Editor</h1>
-
   <div id="controls">
-    <label for="colorPicker">Color:</label>
-    <input type="color" id="colorPicker" value="#000000">
-    <label><input type="checkbox" id="floodFillMode"> Flood Fill</label>
-    <!-- Added Onion Skinning Checkbox -->
-    <label><input type="checkbox" id="onionSkinningMode"> Onion Skinning</label>
+    <div>
+      <label for="colorPicker">Color:</label>
+      <input type="color" id="colorPicker" value="#000000">
+    </div>
+    <div>
+      <label><input type="checkbox" id="floodFillMode"> Flood Fill</label>
+    </div>
+    <div>
+      <label><input type="checkbox" id="onionSkinningMode"> Onion Skinning</label>
+    </div>
+    <div>
+      <label><input type="checkbox" id="selectionMode"> Selection Mode</label>
+    </div>
     <p>Hold Shift while drawing to erase pixels.</p>
-    <label for="fileInput">Load Sprite Sheet:</label>
-    <input type="file" id="fileInput" accept="image/*">
+    <div>
+      <label for="fileInput">Load Sprite Sheet:</label>
+      <input type="file" id="fileInput" accept="image/*">
+    </div>
+    <div id="selectionControls">
+      <button id="cutButton">Cut</button>
+      <button id="copyButton">Copy</button>
+      <button id="pasteButton">Paste</button>
+      <button id="clearSelectionButton">Clear Selection</button>
+    </div>
   </div>
-
-  <div id="frames-container">
-  </div>
-
+  <div id="frames-container"></div>
   <div>
     <button id="addFrameButton">Add Blank Frame</button>
     <button id="duplicateFrameButton">Duplicate Frame</button>
   </div>
-
   <div id="preview-area">
     <h2>Preview</h2>
     <canvas id="previewCanvas" width="64" height="64"></canvas>
-
     <h2>Tiled Horizontal</h2>
     <canvas id="tiledHorizontalCanvas"></canvas>
-
     <h2>Tiled Vertical</h2>
     <canvas id="tiledVerticalCanvas"></canvas>
-
-    <!-- New Animation Preview Section -->
+    <!-- Animation Preview Section -->
     <div id="animation-area">
       <h2>Animation Preview</h2>
       <div id="animationControls">
@@ -132,448 +180,772 @@
         <input type="number" id="animationSpeed" step="0.1" value="0.2" min="0.1">
         <button id="playToggle">Play</button>
       </div>
-      <canvas id="animationPreviewCanvas" width="64" height="64"></canvas>
+      <canvas id="animationPreviewCanvas" width="128" height="128"></canvas>
     </div>
   </div>
-
   <div>
     <button id="saveButton">Save Sprite Sheet</button>
   </div>
-
   <script>
-    const framesContainer = document.getElementById('frames-container');
-    const colorPicker = document.getElementById('colorPicker');
-    const floodFillModeCheckbox = document.getElementById('floodFillMode');
-    const onionSkinningCheckbox = document.getElementById('onionSkinningMode');
-    const addFrameButton = document.getElementById('addFrameButton');
-    const duplicateFrameButton = document.getElementById('duplicateFrameButton');
-    const previewCanvas = document.getElementById('previewCanvas');
-    const tiledHorizontalCanvas = document.getElementById('tiledHorizontalCanvas');
-    const tiledVerticalCanvas = document.getElementById('tiledVerticalCanvas');
-    const saveButton = document.getElementById('saveButton');
-    const fileInput = document.getElementById('fileInput');
-    // Animation preview elements
-    const animationPreviewCanvas = document.getElementById('animationPreviewCanvas');
-    const animationSpeedInput = document.getElementById('animationSpeed');
-    const playToggleButton = document.getElementById('playToggle');
+// ===================== Utility Functions =====================
 
-    const frameWidth = 32;
-    const frameHeight = 32;
-    const previewWidth = 64;
-    const previewHeight = 64;
-    const undoLimit = 20;
-    const upscaleFactor = 2;
+function clearSelection() {
+  const frameData = currentFrames[activeFrameIndex];
+  if (!frameData) return;
+  frameData.selectionBox.style.display = 'none';
+  selectedPixels = [];
+  selectionStartX = selectionStartY = selectionEndX = selectionEndY = 0;
+  selectionOriginX = selectionOriginY = selectionWidth = selectionHeight = 0;
+  selectionFinalized = false;
+}
 
-    let currentFrames = [];
-    let currentColor = colorPicker.value;
-    let activeFrameIndex = 0;
-    let floodFillMode = false;
+function createDragCanvas() {
+  const canvas = document.createElement('canvas');
+  canvas.width = frameWidth;
+  canvas.height = frameHeight;
+  canvas.classList.add('drag-canvas');
+      // Try to get an existing .frame-canvas; if not, use defaults.
+      const base = document.querySelector('.frame-canvas');
+      if (base && base.style.width && base.style.height) {
+        canvas.style.width = base.style.width;
+        canvas.style.height = base.style.height;
+      } else {
+        canvas.style.width = "512px";
+        canvas.style.height = "512px";
+      }
+  return canvas;
+}
 
-    // Animation variables
-    let animationPlaying = false;
-    let animationInterval = null;
-    let animationFrameIndex = 0;
+// ===================== Global Variables =====================
+const framesContainer = document.getElementById('frames-container');
+const colorPicker = document.getElementById('colorPicker');
+const floodFillModeCheckbox = document.getElementById('floodFillMode');
+const onionSkinningCheckbox = document.getElementById('onionSkinningMode');
+const addFrameButton = document.getElementById('addFrameButton');
+const duplicateFrameButton = document.getElementById('duplicateFrameButton');
+const previewCanvas = document.getElementById('previewCanvas');
+const tiledHorizontalCanvas = document.getElementById('tiledHorizontalCanvas');
+const tiledVerticalCanvas = document.getElementById('tiledVerticalCanvas');
+const saveButton = document.getElementById('saveButton');
+const fileInput = document.getElementById('fileInput');
+// Selection Controls
+const selectionModeCheckbox = document.getElementById('selectionMode');
+const selectionControlsDiv = document.getElementById('selectionControls');
+const cutButton = document.getElementById('cutButton');
+const copyButton = document.getElementById('copyButton');
+const pasteButton = document.getElementById('pasteButton');
+const clearSelectionButton = document.getElementById('clearSelectionButton');
+// Animation Controls
+const animationPreviewCanvas = document.getElementById('animationPreviewCanvas');
+const animationSpeedInput = document.getElementById('animationSpeed');
+const playToggleButton = document.getElementById('playToggle');
+// Editor settings
+const frameWidth = 32, frameHeight = 32;
+const previewWidth = 64, previewHeight = 64;
+const undoLimit = 20, upscaleFactor = 2;
+let currentFrames = [];
+let currentColor = colorPicker.value;
+let activeFrameIndex = 0;
+let floodFillMode = false;
+// Animation variables
+let animationPlaying = false, animationInterval = null, animationFrameIndex = 0;
+// Selection variables
+let selectionMode = false;
+let selectionStartX = 0, selectionStartY = 0;
+let selectionEndX = 0, selectionEndY = 0;
+let selectedPixels = []; // Array of pixel objects
+let copiedPixels = null;
+let isDrawing = false, isDraggingSelection = false;
+let dragOffsetX = 0, dragOffsetY = 0;
+let selectionOriginX = 0, selectionOriginY = 0, selectionWidth = 0, selectionHeight = 0;
+let selectionFinalized = false;
+// Paste Mode variables
+let pasteModeActive = false, pasteIndicator = null;
 
-    function initializeFrame() {
-      const canvas = document.createElement('canvas');
-      canvas.width = frameWidth;
-      canvas.height = frameHeight;
-      canvas.classList.add('frame-canvas');
-      const context = canvas.getContext('2d');
-      context.clearRect(0, 0, frameWidth, frameHeight);
-      context.fillStyle = 'rgba(0, 0, 0, 0)';
-      context.fillRect(0, 0, frameWidth, frameHeight);
-      return canvas;
+
+
+// ===================== Frame & Canvas Management =====================
+function initializeFrame() {
+  const canvas = document.createElement('canvas');
+  canvas.width = frameWidth;
+  canvas.height = frameHeight;
+  canvas.classList.add('frame-canvas');
+  const ctx = canvas.getContext('2d');
+  ctx.clearRect(0, 0, frameWidth, frameHeight);
+  ctx.fillStyle = 'rgba(0, 0, 0, 0)';  // Transparent background
+  ctx.fillRect(0, 0, frameWidth, frameHeight);
+  return canvas;
+}
+
+
+function addFrame(newFrame) {
+  const frameContainer = document.createElement('div');
+  frameContainer.classList.add('frame-container');
+
+  const deleteButton = document.createElement('button');
+  deleteButton.classList.add('delete-frame-button');
+  deleteButton.textContent = 'X'; // No need for the span anymore
+
+  // Create selection box and drag overlay.
+  const selectionBox = document.createElement('div');
+  selectionBox.classList.add('selection-box');
+  selectionBox.style.display = 'none';
+
+  const dragCanvas = createDragCanvas();
+
+  frameContainer.appendChild(newFrame);
+  frameContainer.appendChild(dragCanvas);
+  frameContainer.appendChild(selectionBox); // Append selection box *before* button container
+
+    // Create a container for the delete button
+    const buttonContainer = document.createElement('div');
+    buttonContainer.classList.add('button-container'); // Add a class for styling
+    buttonContainer.appendChild(deleteButton);
+    frameContainer.appendChild(buttonContainer); // Append *after* canvas/dragCanvas
+
+
+
+  framesContainer.appendChild(frameContainer);
+
+  currentFrames.push({
+    canvas: newFrame,
+    dragCanvas: dragCanvas,
+    undoStack: [],
+    redoStack: [],
+    selectionBox: selectionBox,
+  });
+
+  let currentFrameIndex = currentFrames.length - 1;
+
+  saveState(currentFrames[currentFrameIndex]); // Save the initial state!
+
+  frameContainer.addEventListener('click', () => {
+    setActiveFrame(currentFrameIndex);
+  });
+
+  newFrame.addEventListener('mousedown', handleMouseDown);
+  newFrame.addEventListener('mouseup', handleMouseUp);
+  newFrame.addEventListener('mouseleave', handleMouseUp);
+  newFrame.addEventListener('mousemove', handleMouseMove);
+
+  deleteButton.addEventListener('click', (event) => {
+    event.stopPropagation(); // Prevent triggering frame selection
+    const index = currentFrames.findIndex((frame) => frame.canvas === newFrame);
+    if (index > -1) {
+      currentFrames.splice(index, 1);
+      frameContainer.remove();
+      if (activeFrameIndex >= index && activeFrameIndex > 0) {
+        setActiveFrame(activeFrameIndex - 1);
+      } else {
+        updatePreviews(); // Update previews if deleting the first frame
+      }
+      if (currentFrames.length === 0) {
+        resetActiveFrame();
+      }
+    }
+  });
+
+  updatePreviews();
+  return frameContainer;
+}
+
+
+    // ===================== Selection & Dragging =====================
+
+    function getSelectedPixels(canvas) {
+      let x = Math.min(selectionStartX, selectionEndX);
+      let y = Math.min(selectionStartY, selectionEndY);
+      let width = Math.abs(selectionEndX - selectionStartX);
+      let height = Math.abs(selectionEndY - selectionStartY);
+
+      if(width <= 0 || height <=0) return [];
+
+      const ctx = canvas.getContext('2d');
+      const imageData = ctx.getImageData(x, y, width, height);
+      const pixels = [];
+
+      for (let i = 0; i < imageData.data.length; i += 4) {
+        const pixelX = (i / 4) % width;
+        const pixelY = Math.floor((i / 4) / width);
+        pixels.push({
+          x: x + pixelX,
+          y: y + pixelY,
+          r: imageData.data[i],
+          g: imageData.data[i + 1],
+          b: imageData.data[i + 2],
+          a: imageData.data[i + 3]
+        });
+      }
+      return pixels;
     }
 
-    function addFrame(newFrame) {
-      const frameContainer = document.createElement('div');
-      frameContainer.classList.add('frame-container');
 
-      const deleteButton = document.createElement('button');
-      deleteButton.classList.add('delete-frame-button');
-      deleteButton.textContent = 'X';
+    function drawFloatingSelection(frameData) {
+      const overlay = frameData.dragCanvas;
+      const ctx = overlay.getContext('2d');
+      ctx.clearRect(0, 0, frameWidth, frameHeight);
 
-      frameContainer.appendChild(newFrame);
-      frameContainer.appendChild(deleteButton);
+      for (const pixel of selectedPixels) {
+        if (pixel.a === 0) continue; // Skip transparent pixels
+        ctx.fillStyle = `rgba(${pixel.r}, ${pixel.g}, ${pixel.b}, ${pixel.a / 255})`;
+        ctx.fillRect(selectionOriginX + pixel.dx, selectionOriginY + pixel.dy, 1, 1);
+      }
+    }
 
-      framesContainer.appendChild(frameContainer);
+    function finalizeFloatingSelection(frameData) {
+      const ctx = frameData.canvas.getContext('2d');
+      for (const pixel of selectedPixels) {
+        if(pixel.a === 0) continue;
+        const destX = selectionOriginX + pixel.dx;
+        const destY = selectionOriginY + pixel.dy;
+        //check bounds
+        if (destX < 0 || destX >= frameWidth || destY < 0 || destY >= frameHeight) continue;
 
-      currentFrames.push({
-        canvas: newFrame,
-        undoStack: [],
-        redoStack: []
-      });
-
-      let currentFrameIndex = currentFrames.length - 1;
-
-      frameContainer.addEventListener('click', () => {
-        setActiveFrame(currentFrameIndex);
-      });
-
-      newFrame.addEventListener('mousedown', function(event) {
-        let isDrawing = true;
-        const frameData = currentFrames[currentFrameIndex];
-
-        function saveState() {
-          frameData.redoStack = [];
-          const imageData = frameData.canvas.getContext('2d').getImageData(0, 0, frameWidth, frameHeight);
-          frameData.undoStack.push(imageData);
-          while (frameData.undoStack.length > undoLimit) {
-            frameData.undoStack.shift();
-          }
-        }
-
-        function drawPixel(event) {
-          if (!isDrawing || activeFrameIndex !== currentFrameIndex) return;
-
-          const rect = newFrame.getBoundingClientRect();
-          const x = Math.floor((event.clientX - rect.left) / (rect.width / frameWidth));
-          const y = Math.floor((event.clientY - rect.top) / (rect.height / frameHeight));
-
-          if (x < 0 || x >= frameWidth || y < 0 || y >= frameHeight) return;
-
-          const context = frameData.canvas.getContext('2d');
-          if (event.shiftKey) {
-            context.clearRect(x, y, 1, 1);
-          } else {
-            context.fillStyle = currentColor;
-            context.fillRect(x, y, 1, 1);
-          }
-
-          updatePreviews();
-        }
-
-        function floodFill(x, y, targetColor, replacementColor) {
-          if (x < 0 || x >= frameWidth || y < 0 || y >= frameHeight) return;
-
-          const context = frameData.canvas.getContext('2d');
-          const imageData = context.getImageData(0, 0, frameWidth, frameHeight);
-          const data = imageData.data;
-
-          const pixelIndex = (y * frameWidth + x) * 4;
-          const r = data[pixelIndex];
-          const g = data[pixelIndex + 1];
-          const b = data[pixelIndex + 2];
-          const a = data[pixelIndex + 3];
-
-          const currentColor = `rgba(${r}, ${g}, ${b}, ${a / 255})`;
-
-          if (currentColor !== targetColor) return;
-
-          context.fillStyle = replacementColor;
-          context.fillRect(x, y, 1, 1);
-
-          floodFill(x + 1, y, targetColor, replacementColor);
-          floodFill(x - 1, y, targetColor, replacementColor);
-          floodFill(x, y + 1, targetColor, replacementColor);
-          floodFill(x, y - 1, targetColor, replacementColor);
-        }
-
-        saveState();
-
-        if (event.ctrlKey) { // Eyedropper
-          const rect = newFrame.getBoundingClientRect();
-          const x = Math.floor((event.clientX - rect.left) / (rect.width / frameWidth));
-          const y = Math.floor((event.clientY - rect.top) / (rect.height / frameHeight));
-
-          if (x < 0 || x >= frameWidth || y < 0 || y >= frameHeight) return;
-
-          const context = frameData.canvas.getContext('2d');
-          const imageData = context.getImageData(x, y, 1, 1).data;
-          const r = imageData[0];
-          const g = imageData[1];
-          const b = imageData[2];
-          currentColor = `#${(r).toString(16).padStart(2, '0')}${(g).toString(16).padStart(2, '0')}${(b).toString(16).padStart(2, '0')}`;
-          colorPicker.value = currentColor;
-        } else if (floodFillMode) {
-          const rect = newFrame.getBoundingClientRect();
-          const x = Math.floor((event.clientX - rect.left) / (rect.width / frameWidth));
-          const y = Math.floor((event.clientY - rect.top) / (rect.height / frameHeight));
-
-          if (x < 0 || x >= frameWidth || y < 0 || y >= frameHeight) return;
-
-          const context = frameData.canvas.getContext('2d');
-          const imageData = context.getImageData(0, 0, frameWidth, frameHeight);
-          const data = imageData.data;
-
-          const pixelIndex = (y * frameWidth + x) * 4;
-          const r = data[pixelIndex];
-          const g = data[pixelIndex + 1];
-          const b = data[pixelIndex + 2];
-          const a = data[pixelIndex + 3];
-
-          const targetColor = `rgba(${r}, ${g}, ${b}, ${a / 255})`;
-
-          floodFill(x, y, targetColor, currentColor);
-        } else {
-          drawPixel(event);
-        }
-
-        newFrame.addEventListener('mousemove', function mouseMoveHandler(event) {
-          if (floodFillMode) return;
-          drawPixel(event);
-        });
-
-        newFrame.addEventListener('mouseup', function() {
-          isDrawing = false;
-          newFrame.removeEventListener('mousemove', mouseMoveHandler);
-        });
-
-        newFrame.addEventListener('mouseleave', function() {
-          isDrawing = false;
-          newFrame.removeEventListener('mousemove', mouseMoveHandler);
-        });
-
-        updatePreviews();
-      });
-
-      deleteButton.addEventListener('click', (event) => {
-        event.stopPropagation();
-        const index = currentFrames.findIndex(frame => frame.canvas === newFrame);
-        if (index > -1) {
-          currentFrames.splice(index, 1);
-          frameContainer.remove();
-          if (activeFrameIndex >= index && activeFrameIndex > 0) {
-            setActiveFrame(activeFrameIndex - 1);
-          } else {
-            updatePreviews();
-          }
-          if (currentFrames.length === 0) {
-            resetActiveFrame();
-          }
-        }
-      });
+        ctx.fillStyle = `rgba(${pixel.r}, ${pixel.g}, ${pixel.b}, ${pixel.a / 255})`;
+        ctx.fillRect(destX, destY, 1, 1);
+      }
 
       updatePreviews();
-      return frameContainer;
+      frameData.dragCanvas.getContext('2d').clearRect(0, 0, frameWidth, frameHeight); //clear drag
+      clearSelection();
     }
 
-    function resetActiveFrame() {
-      activeFrameIndex = -1;
-      updateActiveFrameHighlight();
-      updatePreviews();
+
+    function isPointInsideSelection(x, y) {
+      return (x >= selectionOriginX && x < selectionOriginX + selectionWidth &&
+              y >= selectionOriginY && y < selectionOriginY + selectionHeight);
     }
 
-    function setActiveFrame(index) {
-      activeFrameIndex = index;
-      updateActiveFrameHighlight();
-      updatePreviews();
-      updateOnionSkin(); // Update onion skin overlay when active frame changes
+
+    // ===================== Paste Mode =====================
+    function enterPasteMode() {
+      if (!copiedPixels || copiedPixels.length === 0) return;
+
+      pasteModeActive = true;
+      const activeContainer = framesContainer.children[activeFrameIndex];
+      if (!activeContainer) return;
+
+      pasteIndicator = document.createElement('div');
+      pasteIndicator.classList.add('paste-indicator');
+
+      const activeCanvas = currentFrames[activeFrameIndex].canvas;
+      const scaleX = activeCanvas.offsetWidth / frameWidth;
+      const scaleY = activeCanvas.offsetHeight / frameHeight;
+      pasteIndicator.style.width = (selectionWidth * scaleX) + 'px';
+      pasteIndicator.style.height = (selectionHeight * scaleY) + 'px';
+      pasteIndicator.style.left = '0px'; // Start at top-left
+      pasteIndicator.style.top = '0px';
+      activeContainer.appendChild(pasteIndicator);
     }
 
-    function updateActiveFrameHighlight() {
-      const frameContainers = document.querySelectorAll('.frame-container');
-      frameContainers.forEach((container, i) => {
-        if (i === activeFrameIndex) {
-          container.classList.add('active-frame');
-        } else {
-          container.classList.remove('active-frame');
+    function updatePasteIndicator(frameData, event) {
+      if (!pasteIndicator) return;
+
+      const canvas = frameData.canvas;
+      const rect = canvas.getBoundingClientRect();
+      const x = Math.floor((event.clientX - rect.left) / (rect.width / frameWidth));
+      const y = Math.floor((event.clientY - rect.top) / (rect.height / frameHeight));
+      const scaleX = canvas.offsetWidth / frameWidth;
+      const scaleY = canvas.offsetHeight / frameHeight;
+      pasteIndicator.style.left = (x * scaleX) + 'px';
+      pasteIndicator.style.top = (y * scaleY) + 'px';
+      selectionOriginX = x;
+      selectionOriginY = y;
+
+    }
+
+
+    function finalizePaste(frameData, event) {
+
+      const canvas = frameData.canvas;
+      const rect = canvas.getBoundingClientRect();
+      const x = Math.floor((event.clientX - rect.left) / (rect.width / frameWidth));
+      const y = Math.floor((event.clientY - rect.top) / (rect.height / frameHeight));
+      selectionOriginX = x;
+      selectionOriginY = y;
+
+      selectionStartX = x;
+      selectionStartY = y;
+      selectionEndX = x + selectionWidth;
+      selectionEndY = y + selectionHeight;
+      selectedPixels = copiedPixels; // use the copied pixels as current selection
+      drawFloatingSelection(frameData);
+      exitPasteMode();
+    }
+
+    function exitPasteMode() {
+        pasteModeActive = false;
+        if (pasteIndicator && pasteIndicator.parentNode) {
+            pasteIndicator.parentNode.removeChild(pasteIndicator);
+            pasteIndicator = null;
         }
-      });
     }
 
-    function updatePreviews() {
-      updatePreview();
-      updateTiledHorizontal();
-      updateTiledVertical();
+
+// ===================== Flood Fill =====================
+function floodFill(x, y, targetColor, replacementColor) {
+    const frameData = currentFrames[activeFrameIndex];
+    if (!frameData) return;
+
+    const ctx = frameData.canvas.getContext('2d');
+    let imageData = ctx.getImageData(0, 0, frameWidth, frameHeight);
+    let data = imageData.data;
+
+    function getPixel(x, y) {
+        let i = (y * frameWidth + x) * 4;
+        return [data[i], data[i + 1], data[i + 2], data[i + 3]];
     }
 
-    function updatePreview() {
-      const previewContext = previewCanvas.getContext('2d');
-      previewContext.clearRect(0, 0, previewWidth, previewHeight);
-
-      if (currentFrames.length > 0 && activeFrameIndex >= 0) {
-        const frame = currentFrames[activeFrameIndex].canvas;
-        previewContext.drawImage(frame, 0, 0, previewWidth, previewHeight);
-      }
+    function setPixel(x, y, color) {
+        let i = (y * frameWidth + x) * 4;
+        data[i] = color[0];
+        data[i + 1] = color[1];
+        data[i + 2] = color[2];
+        data[i + 3] = color[3];
     }
 
-    function updateTiledHorizontal() {
-      const tiledContext = tiledHorizontalCanvas.getContext('2d');
-      tiledContext.clearRect(0, 0, tiledHorizontalCanvas.width, tiledHorizontalCanvas.height);
-
-      const numTiles = Math.floor(tiledHorizontalCanvas.width / previewWidth);
-
-      if (currentFrames.length > 0 && activeFrameIndex >= 0) {
-        const frame = currentFrames[activeFrameIndex].canvas;
-        for (let i = 0; i < numTiles; i++) {
-          tiledContext.drawImage(frame, 0, 0, frameWidth, frameHeight, i * previewWidth, 0, previewWidth, tiledHorizontalCanvas.height);
+    function hexToRGBA(hex) {
+        hex = hex.replace('#', '');
+        if (hex.length === 3) {
+          hex = hex.split('').map(c => c + c).join('');
         }
-      }
+        return [
+          parseInt(hex.substring(0, 2), 16),
+          parseInt(hex.substring(2, 4), 16),
+          parseInt(hex.substring(4, 6), 16),
+          255
+        ];
     }
 
-    function updateTiledVertical() {
-      const tiledContext = tiledVerticalCanvas.getContext('2d');
-      tiledContext.clearRect(0, 0, tiledVerticalCanvas.width, tiledVerticalCanvas.height);
 
-      const numTiles = Math.floor(tiledVerticalCanvas.height / previewHeight);
-
-      if (currentFrames.length > 0 && activeFrameIndex >= 0) {
-        const frame = currentFrames[activeFrameIndex].canvas;
-        for (let i = 0; i < numTiles; i++) {
-          tiledContext.drawImage(frame, 0, 0, frameWidth, frameHeight, 0, i * previewHeight, tiledVerticalCanvas.width, previewHeight);
-        }
-      }
+    function colorsMatch(c1, c2) {
+        return c1[0] === c2[0] && c1[1] === c2[1] && c1[2] === c2[2] && c1[3] === c2[3];
     }
 
-    // Added function to update the onion skin overlay on the active frame
-    function updateOnionSkin() {
-      if (!onionSkinningCheckbox.checked) {
-        // Remove any existing onion skin overlay from the active frame container
-        const activeFrameContainer = framesContainer.children[activeFrameIndex];
-        if (activeFrameContainer) {
-          const existingOnionSkin = activeFrameContainer.querySelector('.onion-skin-canvas');
-          if (existingOnionSkin) {
-            existingOnionSkin.remove();
-          }
+    let targetRGBA = getPixel(x, y);
+    let replacementRGBA = hexToRGBA(replacementColor);
+
+    // If already the correct color, exit
+    if (colorsMatch(targetRGBA, replacementRGBA)) return;
+
+    let stack = [[x, y]];
+
+    while (stack.length) {
+        let [cx, cy] = stack.pop();
+        let current = getPixel(cx, cy);
+
+        if (colorsMatch(current, targetRGBA)) {
+            setPixel(cx, cy, replacementRGBA);
+
+            if (cx > 0) stack.push([cx - 1, cy]);
+            if (cx < frameWidth - 1) stack.push([cx + 1, cy]);
+            if (cy > 0) stack.push([cx, cy - 1]);
+            if (cy < frameHeight - 1) stack.push([cx, cy + 1]);
         }
-        return;
-      }
-      const activeFrameContainer = framesContainer.children[activeFrameIndex];
-      if (!activeFrameContainer) return;
-      let onionSkinCanvas = activeFrameContainer.querySelector('.onion-skin-canvas');
-      if (!onionSkinCanvas) {
-        onionSkinCanvas = document.createElement('canvas');
-        onionSkinCanvas.classList.add('onion-skin-canvas');
-        const frameCanvas = activeFrameContainer.querySelector('.frame-canvas');
-        if (frameCanvas) {
-          onionSkinCanvas.width = frameCanvas.width;
-          onionSkinCanvas.height = frameCanvas.height;
-        }
-        // Insert the onion skin canvas as the first child so it appears behind the frame canvas
-        activeFrameContainer.insertBefore(onionSkinCanvas, activeFrameContainer.firstChild);
-      }
-      const ctx = onionSkinCanvas.getContext('2d');
-      ctx.clearRect(0, 0, onionSkinCanvas.width, onionSkinCanvas.height);
-
-      // Draw previous frame if available
-      if (activeFrameIndex > 0) {
-        const prevFrame = currentFrames[activeFrameIndex - 1].canvas;
-        ctx.globalAlpha = 0.5; // adjust transparency as needed
-        ctx.drawImage(prevFrame, 0, 0, onionSkinCanvas.width, onionSkinCanvas.height);
-      }
-
-      // Draw next frame if available
-      if (activeFrameIndex < currentFrames.length - 1) {
-        const nextFrame = currentFrames[activeFrameIndex + 1].canvas;
-        ctx.globalAlpha = 0.5;
-        ctx.drawImage(nextFrame, 0, 0, onionSkinCanvas.width, onionSkinCanvas.height);
-      }
-
-      ctx.globalAlpha = 1.0; // reset alpha
     }
 
-    // Animation functions
+    ctx.putImageData(imageData, 0, 0);
+    updatePreviews();
+}
+
+
+    // ===================== Animation Functions =====================
     function startAnimation() {
-      const speed = parseFloat(animationSpeedInput.value) * 1000; // convert seconds to ms
-      if (animationInterval) clearInterval(animationInterval);
-      animationInterval = setInterval(() => {
-        if (currentFrames.length === 0) return;
-        const animCtx = animationPreviewCanvas.getContext('2d');
-        animCtx.clearRect(0, 0, animationPreviewCanvas.width, animationPreviewCanvas.height);
+      const speed = parseFloat(animationSpeedInput.value)*1000; //convert to ms
+      if(animationInterval) clearInterval(animationInterval);
+
+      animationInterval = setInterval(()=>{
+        if(currentFrames.length===0)return;
+        const ctx = animationPreviewCanvas.getContext('2d');
+        ctx.clearRect(0,0,animationPreviewCanvas.width,animationPreviewCanvas.height);
         const frame = currentFrames[animationFrameIndex].canvas;
-        animCtx.drawImage(frame, 0, 0, animationPreviewCanvas.width, animationPreviewCanvas.height);
-        animationFrameIndex = (animationFrameIndex + 1) % currentFrames.length;
-      }, speed);
+        ctx.drawImage(frame,0,0,animationPreviewCanvas.width,animationPreviewCanvas.height);
+        animationFrameIndex = (animationFrameIndex+1)%currentFrames.length; //loop
+      },speed);
     }
 
     function stopAnimation() {
-      if (animationInterval) {
-        clearInterval(animationInterval);
-        animationInterval = null;
-      }
+      if(animationInterval) { clearInterval(animationInterval); animationInterval=null; }
     }
 
-    playToggleButton.addEventListener('click', () => {
+    playToggleButton.addEventListener('click', ()=>{
       animationPlaying = !animationPlaying;
-      if (animationPlaying) {
-        playToggleButton.textContent = "Stop";
-        animationFrameIndex = 0; // reset index
-        startAnimation();
-      } else {
-        playToggleButton.textContent = "Play";
-        stopAnimation();
+      if(animationPlaying) { playToggleButton.textContent = "Stop"; animationFrameIndex = 0; startAnimation(); }
+      else { playToggleButton.textContent = "Play"; stopAnimation(); }
+    });
+
+    animationSpeedInput.addEventListener('change', ()=>{
+      if(animationPlaying) { stopAnimation(); startAnimation(); } //restart with new speed
+    });
+
+
+    // ===================== Undo/Redo =====================
+    function undo() {
+      const frameData = currentFrames[activeFrameIndex];
+      if (!frameData || frameData.undoStack.length === 0) return;
+
+      const ctx = frameData.canvas.getContext('2d');
+
+      // Save the current state *before* undoing
+      const currentState = ctx.getImageData(0, 0, frameWidth, frameHeight);
+      frameData.redoStack.push(currentState);
+
+      // Restore the last saved state
+      const lastState = frameData.undoStack.pop();
+      ctx.putImageData(lastState, 0, 0);
+      updatePreviews();
+    }
+
+    function redo() {
+      const frameData = currentFrames[activeFrameIndex];
+      if (!frameData || frameData.redoStack.length === 0) return;
+
+      const ctx = frameData.canvas.getContext('2d');
+
+      // Save the current state *before* redoing
+      const currentState = ctx.getImageData(0, 0, frameWidth, frameHeight);
+      frameData.undoStack.push(currentState);
+
+      // Restore the next redo state
+      const nextState = frameData.redoStack.pop();
+      ctx.putImageData(nextState, 0, 0);
+      updatePreviews();
+    }
+
+    // Undo/Redo Key Handlers
+    document.addEventListener('keydown', (event)=>{
+      if(event.ctrlKey && !event.shiftKey && event.key.toLowerCase()==='z'){
+        event.preventDefault();
+        undo();
+      }
+      if(event.ctrlKey && event.key.toLowerCase()==='y'){ //ctrl+y, not ctrl+shift+z
+        event.preventDefault();
+        redo();
       }
     });
 
-    animationSpeedInput.addEventListener('change', () => {
-      if (animationPlaying) {
-        stopAnimation();
-        startAnimation();
-      }
-    });
 
-    addFrameButton.addEventListener('click', () => {
-      const newFrame = initializeFrame();
-      const frameContainer = addFrame(newFrame);
-      setActiveFrame(currentFrames.length - 1);
-    });
+    // ===================== Mouse Event Handlers =====================
 
-    duplicateFrameButton.addEventListener('click', () => {
-      if (currentFrames.length === 0) return;
+function handleMouseDown(event) {
+        const currentFrameIndex = getCurrentFrameIndex(event.target);
+        if (currentFrameIndex === -1 || activeFrameIndex !== currentFrameIndex) return;
 
-      const lastFrameData = currentFrames[currentFrames.length - 1];
-      const newFrame = initializeFrame();
-      const context = newFrame.getContext('2d');
-      context.drawImage(lastFrameData.canvas, 0, 0);
-      addFrame(newFrame);
-      setActiveFrame(currentFrames.length - 1);
-    });
+        const frameData = currentFrames[currentFrameIndex];
+        const canvas = frameData.canvas;
+        // Store the PREVIOUS state for undo (only if NOT Ctrl-clicking)
+        if (!event.ctrlKey) {
+            saveState(frameData);
+        }
 
-    colorPicker.addEventListener('input', (event) => {
-      currentColor = event.target.value;
-    });
 
-    floodFillModeCheckbox.addEventListener('change', (event) => {
-      floodFillMode = event.target.checked;
-    });
+        const rect = canvas.getBoundingClientRect();
+        const x = Math.floor((event.clientX - rect.left) / (rect.width / frameWidth));
+        const y = Math.floor((event.clientY - rect.top) / (rect.height / frameHeight));
 
-    // Update onion skin overlay when the checkbox changes
-    onionSkinningCheckbox.addEventListener('change', updateOnionSkin);
+        if (pasteModeActive) {
+            finalizePaste(frameData, event);
+            return;
+        }
+        if (event.ctrlKey) { // Eyedropper
+            const ctx = canvas.getContext('2d');
+            const imageData = ctx.getImageData(x, y, 1, 1).data;
+            const r = imageData[0];
+            const g = imageData[1];
+            const b = imageData[2];
+            currentColor = `#${r.toString(16).padStart(2, '0')}${g.toString(16).padStart(2, '0')}${b.toString(16).padStart(2, '0')}`;
+            colorPicker.value = currentColor;
+            return; // Exit early, don't start drawing
 
-    fileInput.addEventListener('change', (event) => {
-      const file = event.target.files[0];
-      if (file) {
-        const reader = new FileReader();
-        reader.onload = function (e) {
-          const img = new Image();
-          img.onload = function () {
-            // Determine number of frames based on the image width
-            const numFrames = Math.floor(img.width / (frameWidth * upscaleFactor));
+        }
 
-            // Clear existing frames
-            while (currentFrames.length > 0) {
-              const frameData = currentFrames.pop();
-              frameData.canvas.parentNode.remove();
+        if (selectionMode) {
+          selectionFinalized = false; // Reset
+          if (isPointInsideSelection(x, y)) {
+            isDraggingSelection = true;
+            dragOffsetX = x - selectionOriginX;
+            dragOffsetY = y - selectionOriginY;
+          } else {
+            // Start a new selection
+            selectionStartX = x;
+            selectionStartY = y;
+            selectionEndX = x; //initial
+            selectionEndY = y;
+            frameData.selectionBox.style.display = 'block';
+            updateSelectionBox(frameData.selectionBox, canvas);
+          }
+        }
+        else
+        {
+          isDrawing = true;
+          drawing(event, frameData);
+        }
+    }
+
+function handleMouseUp(event) {
+
+    const currentFrameIndex = getCurrentFrameIndex(event.target);
+    if (currentFrameIndex === -1 || activeFrameIndex !== currentFrameIndex) return;
+    const frameData = currentFrames[currentFrameIndex];
+    const canvas = frameData.canvas;
+
+    const rect = canvas.getBoundingClientRect();
+    const x = Math.floor((event.clientX - rect.left) / (rect.width / frameWidth));
+    const y = Math.floor((event.clientY - rect.top) / (rect.height / frameHeight));
+
+    if (selectionMode) {
+        if (isDraggingSelection) {
+            isDraggingSelection = false;
+            finalizeFloatingSelection(frameData);
+
+        } else {
+            // Finalize new selection
+            selectionEndX = x;
+            selectionEndY = y;
+            selectionOriginX = Math.min(selectionStartX, selectionEndX);
+            selectionOriginY = Math.min(selectionStartY, selectionEndY);
+            selectionWidth = Math.abs(selectionEndX - selectionStartX);
+            selectionHeight = Math.abs(selectionEndY - selectionStartY);
+            updateSelectionBox(frameData.selectionBox, canvas);
+            // Get the selected pixels before clearing
+            selectedPixels = getSelectedPixels(canvas);
+
+            // Add dx and dy properties for relative position
+            for (let pixel of selectedPixels) {
+              pixel.dx = pixel.x - selectionOriginX;
+              pixel.dy = pixel.y - selectionOriginY;
             }
-            framesContainer.innerHTML = '';
 
-            // Create and load frames
-            for (let i = 0; i < numFrames; i++) {
+            // Clear the selected area from the main canvas
+            const ctx = canvas.getContext('2d');
+            ctx.clearRect(selectionOriginX, selectionOriginY, selectionWidth, selectionHeight);
+            selectionFinalized = true;
+            drawFloatingSelection(frameData); // Draw the floating selection
+        }
+    }
+    else {
+        isDrawing = false;
+          // Save the new state *after* the drawing is finished
+          saveState(frameData);
+    }
+}
+
+
+function handleMouseMove(event) {
+  const currentFrameIndex = getCurrentFrameIndex(event.target);
+  if(currentFrameIndex===-1 || activeFrameIndex!==currentFrameIndex)return;
+  const frameData = currentFrames[currentFrameIndex];
+  const canvas = frameData.canvas;
+  const rect = canvas.getBoundingClientRect();
+  const x = Math.floor((event.clientX-rect.left)/(rect.width/frameWidth));
+  const y = Math.floor((event.clientY-rect.top)/(rect.height/frameHeight));
+
+  if(pasteModeActive) {
+      updatePasteIndicator(frameData, event);
+      return;
+  }
+
+  if(selectionMode) {
+    if(isDraggingSelection) {
+        //drag existing selection
+        let newOriginX = x - dragOffsetX;
+        let newOriginY = y - dragOffsetY;
+        //keep within bounds
+        newOriginX = Math.max(0, Math.min(newOriginX, frameWidth-selectionWidth));
+        newOriginY = Math.max(0, Math.min(newOriginY, frameHeight-selectionHeight));
+
+        selectionOriginX = newOriginX;
+        selectionOriginY = newOriginY;
+        drawFloatingSelection(frameData); //redraw floating selection
+        selectionStartX = newOriginX;
+        selectionStartY = newOriginY;
+        selectionEndX = newOriginX + selectionWidth;
+        selectionEndY = newOriginY + selectionHeight;
+        updateSelectionBox(frameData.selectionBox, canvas);
+
+    } else if(event.buttons===1 && !selectionFinalized){ //mouse button is down
+      //drag to create selection
+      selectionEndX = x;
+      selectionEndY = y;
+      updateSelectionBox(frameData.selectionBox, canvas);
+      selectedPixels = getSelectedPixels(canvas);
+    }
+
+  }
+  else{
+    drawing(event, frameData);
+  }
+
+}
+
+
+function drawing(event, frameData) {
+  if(selectionMode || !isDrawing)return; //don't draw if in selection mode, or if not mousedown
+  const rect = frameData.canvas.getBoundingClientRect();
+  const x = Math.floor((event.clientX-rect.left)/(rect.width/frameWidth));
+  const y = Math.floor((event.clientY-rect.top)/(rect.height/frameHeight));
+
+  if(x<0 || x>=frameWidth || y<0 || y>=frameHeight)return; //OOB
+
+  const ctx = frameData.canvas.getContext('2d');
+  if(event.shiftKey){
+      ctx.clearRect(x,y,1,1);
+  }
+  else if (floodFillMode) {
+        floodFill(x, y, null, currentColor); // Pass null for target color when using floodFillMode.
+  }
+  else {
+      ctx.fillStyle = currentColor;
+      ctx.fillRect(x,y,1,1);
+  }
+  updatePreviews();
+
+}
+
+
+
+function getCurrentFrameIndex(canvas) {
+  return currentFrames.findIndex(frame => frame.canvas === canvas);
+}
+
+
+function resetActiveFrame() {
+  activeFrameIndex = -1;
+  updateActiveFrameHighlight();
+  updatePreviews();
+}
+
+function setActiveFrame(index) {
+  activeFrameIndex = index;
+  updateActiveFrameHighlight();
+  updatePreviews();
+  updateOnionSkin(); // Update onion skin when active frame changes
+}
+
+function updateActiveFrameHighlight() {
+  const containers = document.querySelectorAll('.frame-container');
+  containers.forEach((c,i)=>{
+    c.classList.toggle('active-frame', i===activeFrameIndex);
+  });
+}
+
+function updatePreviews() {
+    updatePreview();
+    updateTiledHorizontal();
+    updateTiledVertical();
+}
+
+
+function updatePreview() {
+  const ctx = previewCanvas.getContext('2d');
+  ctx.clearRect(0,0,previewWidth,previewHeight);
+  if(currentFrames.length>0 && activeFrameIndex>=0){
+    const frame = currentFrames[activeFrameIndex].canvas;
+    ctx.drawImage(frame,0,0,previewWidth,previewHeight);
+  }
+}
+
+function updateTiledHorizontal() {
+  const ctx = tiledHorizontalCanvas.getContext('2d');
+  ctx.clearRect(0,0,tiledHorizontalCanvas.width,tiledHorizontalCanvas.height);
+  const numTiles = Math.floor(tiledHorizontalCanvas.width/previewWidth);
+
+  if(currentFrames.length>0 && activeFrameIndex>=0){
+    const frame = currentFrames[activeFrameIndex].canvas;
+    for(let i=0;i<numTiles;i++){
+      ctx.drawImage(frame,0,0,frameWidth,frameHeight,i*previewWidth,0,previewWidth,tiledHorizontalCanvas.height);
+    }
+  }
+}
+
+function updateTiledVertical() {
+  const ctx = tiledVerticalCanvas.getContext('2d');
+  ctx.clearRect(0,0,tiledVerticalCanvas.width,tiledVerticalCanvas.height);
+  const numTiles = Math.floor(tiledVerticalCanvas.height/previewHeight);
+
+  if(currentFrames.length>0 && activeFrameIndex>=0){
+    const frame = currentFrames[activeFrameIndex].canvas;
+    for(let i=0;i<numTiles;i++){
+      ctx.drawImage(frame,0,0,frameWidth,frameHeight,0,i*previewHeight,tiledVerticalCanvas.width,previewHeight);
+    }
+  }
+}
+
+// Onion skin overlay
+function updateOnionSkin() {
+    if (!onionSkinningCheckbox.checked) {
+        // Remove any existing onion skin canvas
+        const container = framesContainer.children[activeFrameIndex];
+        if (container) {
+            const existing = container.querySelector('.onion-skin-canvas');
+            if (existing) existing.remove();
+        }
+        return;
+    }
+
+    const container = framesContainer.children[activeFrameIndex];
+    if (!container) return;
+
+    let onion = container.querySelector('.onion-skin-canvas');
+    if (!onion) {
+        onion = document.createElement('canvas');
+        onion.classList.add('onion-skin-canvas');
+        const frame = container.querySelector('.frame-canvas');
+        if (frame) {
+          onion.width = frame.width;
+          onion.height = frame.height;
+        }
+        container.insertBefore(onion, container.firstChild); // Insert before frame canvas
+    }
+    const ctx = onion.getContext('2d');
+    ctx.clearRect(0, 0, onion.width, onion.height);
+
+    if (activeFrameIndex > 0) {
+        const prev = currentFrames[activeFrameIndex - 1].canvas;
+        ctx.globalAlpha = 0.5; // Semi-transparent
+        ctx.drawImage(prev, 0, 0, onion.width, onion.height);
+    }
+    if (activeFrameIndex < currentFrames.length - 1) {
+        const next = currentFrames[activeFrameIndex + 1].canvas;
+        ctx.globalAlpha = 0.5;
+        ctx.drawImage(next, 0, 0, onion.width, onion.height);
+    }
+    ctx.globalAlpha = 1.0; // Reset alpha
+}
+
+
+
+    // ===================== File, Save, & Misc =====================
+
+    fileInput.addEventListener('change', (event)=>{
+      const file = event.target.files[0];
+      if(file){
+        const reader = new FileReader();
+        reader.onload = function(e){
+          const img = new Image();
+          img.onload = function(){
+            const numFrames = Math.floor(img.width/(frameWidth*upscaleFactor));
+            //clear existing frames
+            while(currentFrames.length>0){
+              const fd = currentFrames.pop();
+              fd.canvas.parentNode.remove(); //remove from DOM
+            }
+            framesContainer.innerHTML = ''; // Clear the container
+
+            for(let i=0;i<numFrames;i++){
               const newFrame = initializeFrame();
-              const context = newFrame.getContext('2d');
-
-              // Draw the section of the image onto the frame (downscaling)
-              context.drawImage(
+              const ctx = newFrame.getContext('2d');
+              ctx.drawImage(
                 img,
-                i * frameWidth * upscaleFactor,
-                0,
-                frameWidth * upscaleFactor,
-                frameHeight * upscaleFactor,
-                0,
-                0,
-                frameWidth,
-                frameHeight
+                i*frameWidth*upscaleFactor, //source x
+                0, //source y
+                frameWidth*upscaleFactor, //source width
+                frameHeight*upscaleFactor, //source height
+                0,0,frameWidth,frameHeight //destination
               );
-
               addFrame(newFrame);
             }
-
-            if (currentFrames.length > 0) {
-              setActiveFrame(0);
-            }
-
+            if(currentFrames.length>0) { setActiveFrame(0); } //set first as active
             updatePreviews();
           }
           img.src = e.target.result;
@@ -582,69 +954,161 @@
       }
     });
 
-    saveButton.addEventListener('click', () => {
-      if (currentFrames.length === 0) {
-        alert("No frames to save!");
-        return;
-      }
+    saveButton.addEventListener('click', ()=>{
+      if(currentFrames.length===0) { alert("No frames to save!"); return; }
 
-      const totalWidth = frameWidth * currentFrames.length;
-      const spriteSheetCanvas = document.createElement('canvas');
-      spriteSheetCanvas.width = totalWidth * upscaleFactor;
-      spriteSheetCanvas.height = frameHeight * upscaleFactor;
-      const spriteSheetContext = spriteSheetCanvas.getContext('2d');
-      spriteSheetContext.imageSmoothingEnabled = false;
+      const totalWidth = frameWidth*currentFrames.length;
+      const spriteSheet = document.createElement('canvas');
+      spriteSheet.width = totalWidth*upscaleFactor;
+      spriteSheet.height = frameHeight*upscaleFactor;
+      const ctx = spriteSheet.getContext('2d');
+      ctx.imageSmoothingEnabled = false; //important for pixel art
 
       let xOffset = 0;
-      for (const frameData of currentFrames) {
-        spriteSheetContext.drawImage(frameData.canvas, xOffset, 0, frameWidth * upscaleFactor, frameHeight * upscaleFactor);
-        xOffset += frameWidth * upscaleFactor;
+      for(const fd of currentFrames){
+        ctx.drawImage(fd.canvas, xOffset, 0, frameWidth*upscaleFactor, frameHeight*upscaleFactor); //draw each frame
+        xOffset += frameWidth*upscaleFactor;
       }
 
-      const dataURL = spriteSheetCanvas.toDataURL("image/png");
+      const dataURL = spriteSheet.toDataURL("image/png"); //get PNG data
       const link = document.createElement('a');
       link.href = dataURL;
       link.download = "sprite_sheet.png";
-      document.body.appendChild(link);
+      document.body.appendChild(link); //add to DOM for download
       link.click();
       document.body.removeChild(link);
     });
 
-    // Undo Function
-    document.addEventListener('keydown', function(event) {
-      if (event.ctrlKey && event.key === 'z') {
-        if (activeFrameIndex >= 0 && currentFrames[activeFrameIndex]) {
-          const frameData = currentFrames[activeFrameIndex];
-          if (frameData.undoStack.length > 0) {
-            const context = frameData.canvas.getContext('2d');
-            const imageData = frameData.undoStack.pop();
-            frameData.redoStack.push(context.getImageData(0, 0, frameWidth, frameHeight));
 
-            context.putImageData(imageData, 0, 0);
-            updatePreviews();
-          }
-        }
-      }
 
-      if (event.ctrlKey && event.key === 'y') {
-        if (activeFrameIndex >= 0 && currentFrames[activeFrameIndex]) {
-          const frameData = currentFrames[activeFrameIndex];
-          if (frameData.redoStack.length > 0) {
-            const context = frameData.canvas.getContext('2d');
-            const imageData = frameData.redoStack.pop();
-            frameData.undoStack.push(context.getImageData(0, 0, frameWidth, frameHeight));
-
-            context.putImageData(imageData, 0, 0);
-            updatePreviews();
-          }
-        }
-      }
+    // ===================== Button Event Handlers =====================
+    addFrameButton.addEventListener('click', ()=>{
+      const newFrame = initializeFrame();
+      addFrame(newFrame);
+      setActiveFrame(currentFrames.length-1); //set new frame as active
     });
 
-    // Initial frame
-    const initialFrame = initializeFrame();
-    addFrame(initialFrame);
-    setActiveFrame(0);
+    duplicateFrameButton.addEventListener('click', ()=>{
+      if(currentFrames.length===0)return;
+      const lastFrame = currentFrames[currentFrames.length-1];
+      const newFrame = initializeFrame();
+      const ctx = newFrame.getContext('2d');
+      ctx.drawImage(lastFrame.canvas,0,0); //copy image data
+      addFrame(newFrame);
+      setActiveFrame(currentFrames.length-1);
+    });
+
+    colorPicker.addEventListener('input', (event)=>{
+      currentColor = event.target.value;
+    });
+
+    floodFillModeCheckbox.addEventListener('change', (event)=>{
+      floodFillMode = event.target.checked;
+    });
+
+    onionSkinningCheckbox.addEventListener('change', updateOnionSkin);
+
+    selectionModeCheckbox.addEventListener('change', ()=>{
+      selectionMode = selectionModeCheckbox.checked;
+      selectionControlsDiv.style.display = selectionMode ? 'flex' : 'none';
+      if(!selectionMode){ clearSelection(); }
+    });
+
+    cutButton.addEventListener('click', ()=>{
+        copiedPixels = selectedPixels;
+        clearSelectedArea();
+    });
+
+    copyButton.addEventListener('click', ()=>{
+        copiedPixels = selectedPixels;
+        console.log("Copied Pixels:", copiedPixels); // For debugging, check what's being copied
+    });
+
+     pasteButton.addEventListener('click', () => {
+        if (copiedPixels && copiedPixels.length > 0) {
+            selectedPixels = copiedPixels;
+            // Determine the top-left corner of the copied selection
+            selectionOriginX = Math.min(...copiedPixels.map(p => p.x));
+            selectionOriginY = Math.min(...copiedPixels.map(p => p.y));
+            selectionWidth = Math.max(...copiedPixels.map(p => p.x)) - selectionOriginX + 1;
+            selectionHeight = Math.max(...copiedPixels.map(p => p.y)) - selectionOriginY + 1;
+            const fd = currentFrames[activeFrameIndex];
+
+            selectionStartX = selectionOriginX;
+            selectionStartY = selectionOriginY;
+            selectionEndX = selectionOriginX + selectionWidth;
+            selectionEndY = selectionOriginY + selectionHeight;
+
+
+            fd.selectionBox.style.display = 'block';
+            updateSelectionBox(fd.selectionBox, fd.canvas);
+            drawFloatingSelection(fd); // Immediately show the floating selection
+            enterPasteMode(); // And allow repositioning with the paste indicator
+        }
+    });
+
+    clearSelectionButton.addEventListener('click', clearSelection);
+
+
+     // ===================== Clear Selected Area (non-destructive) =====================
+    function clearSelectedArea() {
+        if (selectedPixels.length === 0) return;
+        const fd = currentFrames[activeFrameIndex];
+        fd.dragCanvas.getContext('2d').clearRect(0,0,frameWidth, frameHeight); // Clear floating selection
+        selectedPixels = [];
+        clearSelection();
+        updatePreviews();
+    }
+
+    // ===================== Helper functions =====================
+
+    function saveState(frameData) {
+        if (!frameData) return;
+
+        // Only save state if it's different from the last saved state.
+        const ctx = frameData.canvas.getContext('2d');
+        const currentState = ctx.getImageData(0, 0, frameWidth, frameHeight);
+
+        // Avoid duplicate consecutive saves
+        if (frameData.undoStack.length > 0) {
+            const lastState = frameData.undoStack[frameData.undoStack.length - 1];
+            if (JSON.stringify(lastState.data) === JSON.stringify(currentState.data)) {
+              return;
+            }
+        }
+
+        // Push the current state onto the undo stack.
+        frameData.undoStack.push(currentState);
+
+        // Clear redo stack whenever a new action occurs
+        frameData.redoStack = [];
+
+        // Keep only the last undoLimit (e.g., 20) undo states.
+        if (frameData.undoStack.length > undoLimit) {
+            frameData.undoStack.shift();
+        }
+    }
+
+
+    function updateSelectionBox(box, canvas) {
+        const scaleX = canvas.offsetWidth / frameWidth;
+        const scaleY = canvas.offsetHeight / frameHeight;
+
+        // Calculate selection dimensions based on selection start/end coordinates.
+        const left = Math.min(selectionStartX, selectionEndX);
+        const top = Math.min(selectionStartY, selectionEndY);
+        const width = Math.abs(selectionEndX - selectionStartX);
+        const height = Math.abs(selectionEndY - selectionStartY);
+
+
+        box.style.left = (left * scaleX) + 'px';
+        box.style.top = (top * scaleY) + 'px';
+        box.style.width = (width * scaleX) + 'px';
+        box.style.height = (height * scaleY) + 'px';
+        box.style.display = 'block';
+    }
+
+
 
   </script>
 </body>
